@@ -2,18 +2,23 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/gorilla/mux"
 )
 
 type ApiFunc func(http.ResponseWriter, *http.Request) error
+type ApiError struct {
+	Error string
+}
 
-func handleError(A ApiFunc) http.HandlerFunc {
+func makeHttpHandlerFunc(A ApiFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		if err := A(w, req); err != nil {
-			// Handle the error Ibk
+			writeJson(w, http.StatusBadRequest, ApiError{
+				Error: err.Error(),
+			})
 		}
 	}
 }
@@ -24,11 +29,14 @@ type ApiServer struct {
 
 func (S *ApiServer) run() {
 	router := mux.NewRouter()
-	router.HandleFunc("/account")
+	router.HandleFunc("/account", makeHttpHandlerFunc(S.handleAccount))
+	log.Println("Port " + S.listenAddress + " is now running")
+	http.ListenAndServe(S.listenAddress, router)
+
 }
 func writeJson(w http.ResponseWriter, status int, v any) error {
 	w.WriteHeader(status)
-	w.Header().Set("Content-type", "application/json")
+	w.Header().Set("Content-Type", "application/json")
 
 	return json.NewEncoder(w).Encode(v)
 }
@@ -40,9 +48,19 @@ func newApiServer(las string) *ApiServer {
 
 // Handling of request
 func (S *ApiServer) handleAccount(w http.ResponseWriter, req *http.Request) error {
+	if req.Method == "GET" {
+		return S.handleGetAccount(w, req)
+	}
+	if req.Method == "POST" {
+		return S.handleCreateAccount(w, req)
+	}
+	if req.Method == "DELETE" {
+		return S.handleDeleteAccount(w, req)
+	}
 	return nil
 }
 func (S *ApiServer) handleGetAccount(w http.ResponseWriter, req *http.Request) error {
+
 	return nil
 }
 func (S *ApiServer) handleDeleteAccount(w http.ResponseWriter, req *http.Request) error {
@@ -52,5 +70,7 @@ func (S *ApiServer) handleCreateAccount(w http.ResponseWriter, req *http.Request
 	return nil
 }
 func main() {
-	fmt.Println("Hello web server")
+	// fmt.Println("Hello web server")
+	w := newApiServer(":2000")
+	w.run()
 }
