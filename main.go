@@ -39,7 +39,7 @@ func (S *ApiServer) run() {
 }
 func writeJson(w http.ResponseWriter, status int, v any) error {
 	w.WriteHeader(status)
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Add("Content-Type", "application/json")
 
 	return json.NewEncoder(w).Encode(v)
 }
@@ -77,7 +77,9 @@ func (S *ApiServer) handleCreateAccount(w http.ResponseWriter, req *http.Request
 }
 func main() {
 	store, err := databaseConnection()
-	log.Fatalf("error", err)
+	if err != nil {
+		log.Fatal(err)
+	}
 	// fmt.Println("Hello web server")
 	w := newApiServer(":2000", store)
 	w.run()

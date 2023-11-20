@@ -1,6 +1,11 @@
 package main
 
-import "database/sql"
+import (
+	"database/sql"
+	"log"
+
+	_ "github.com/lib/pq"
+)
 
 type Storage interface {
 	createAccout(*Account) error
@@ -13,7 +18,17 @@ type PostGresSql struct {
 }
 
 func databaseConnection() (*PostGresSql, error) {
-	return nil, nil
+	conStr := "user=postgres dbname=postgres password=ezybankgo sslmode=disable"
+	db, _ := sql.Open("postgres", conStr)
+
+	err := db.Ping()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return &PostGresSql{
+		db: db,
+	}, nil
 }
 func (p *PostGresSql) createAccout(*Account) error {
 	return nil
