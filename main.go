@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -25,11 +26,13 @@ func makeHttpHandlerFunc(A ApiFunc) http.HandlerFunc {
 
 type ApiServer struct {
 	listenAddress string
+	store         Storage
 }
 
 func (S *ApiServer) run() {
 	router := mux.NewRouter()
 	router.HandleFunc("/account", makeHttpHandlerFunc(S.handleAccount))
+	router.HandleFunc("/account/{id}", makeHttpHandlerFunc(S.handleGetAccount))
 	log.Println("Port " + S.listenAddress + " is now running")
 	http.ListenAndServe(S.listenAddress, router)
 
@@ -40,9 +43,10 @@ func writeJson(w http.ResponseWriter, status int, v any) error {
 
 	return json.NewEncoder(w).Encode(v)
 }
-func newApiServer(las string) *ApiServer {
+func newApiServer(las string, store Storage) *ApiServer {
 	return &ApiServer{
 		listenAddress: las,
+		store:         store,
 	}
 }
 
@@ -60,7 +64,9 @@ func (S *ApiServer) handleAccount(w http.ResponseWriter, req *http.Request) erro
 	return nil
 }
 func (S *ApiServer) handleGetAccount(w http.ResponseWriter, req *http.Request) error {
-
+	id := mux.Vars(req)
+	fmt.Println(id)
+	writeJson(w, http.StatusOK, &Account{})
 	return nil
 }
 func (S *ApiServer) handleDeleteAccount(w http.ResponseWriter, req *http.Request) error {
@@ -70,7 +76,9 @@ func (S *ApiServer) handleCreateAccount(w http.ResponseWriter, req *http.Request
 	return nil
 }
 func main() {
+	store, err := databaseConnection()
+	log.Fatalf("error", err)
 	// fmt.Println("Hello web server")
-	w := newApiServer(":2000")
+	w := newApiServer(":2000", store)
 	w.run()
 }
