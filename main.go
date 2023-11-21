@@ -73,11 +73,24 @@ func (S *ApiServer) handleDeleteAccount(w http.ResponseWriter, req *http.Request
 	return nil
 }
 func (S *ApiServer) handleCreateAccount(w http.ResponseWriter, req *http.Request) error {
-	return nil
+
+	createAccount := new(CreateAccountRequest)
+
+	if err := json.NewDecoder(req.Body).Decode(createAccount); err != nil {
+		return err
+	}
+	account := HandleAccount(createAccount.FirstName, createAccount.LastName)
+	if err := S.store.createAccount(account); err != nil {
+		return err
+	}
+	return writeJson(w, http.StatusOK, account)
 }
 func main() {
 	store, err := databaseConnection()
 	if err != nil {
+		log.Fatal(err)
+	}
+	if err = store.createAccoutTable(); err != nil {
 		log.Fatal(err)
 	}
 	// fmt.Println("Hello web server")
