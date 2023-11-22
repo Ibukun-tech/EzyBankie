@@ -85,7 +85,7 @@ func (S *ApiServer) handleGetAccountId(w http.ResponseWriter, req *http.Request)
 
 	id, err := getParams(req)
 	if err != nil {
-		return fmt.Errorf("invalid ID %s", id)
+		return fmt.Errorf("invalid ID %d", id)
 	}
 	account, err := S.store.GetAccountById(id)
 	if err != nil {
