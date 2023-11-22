@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
 )
 
@@ -46,11 +48,35 @@ type ApiServer struct {
 func (S *ApiServer) run() {
 	router := mux.NewRouter()
 	router.HandleFunc("/account", makeHttpHandlerFunc(S.handleAccount))
-	router.HandleFunc("/account/{id}", makeHttpHandlerFunc(S.handleAccountsById))
+	router.HandleFunc("/account/{id}", jwtMiddleWare(makeHttpHandlerFunc(S.handleAccountsById)))
 	router.HandleFunc("/account/transfer", makeHttpHandlerFunc(S.handleTransferAccount))
 	log.Println("Port " + S.listenAddress + " is now running")
 	http.ListenAndServe(S.listenAddress, router)
 
+}
+func jwtMiddleWare(handlerFunc http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		// fmt.Println("calling JWT middleware")
+		validateTokenString := req.Header.Get("JWT-TOKEN")
+
+		_, err := validateJwt(validateTokenString)
+		if err != nil {
+			writeJson(w, http.StatusBadRequest, ApiError{
+				Error: "Invalid token",
+			})
+			return
+		}
+		handlerFunc(w, req)
+	}
+}
+func validateJwt(tokenVal string) (*jwt.Token, error) {
+	token := os.Getenv("TOKEN")
+	return jwt.Parse(tokenVal, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("Unexpected signing method")
+		}
+		return []byte(token), nil
+	})
 }
 
 func (S *ApiServer) handleAccountsById(w http.ResponseWriter, req *http.Request) error {
@@ -92,7 +118,7 @@ func (S *ApiServer) handleGetAccountId(w http.ResponseWriter, req *http.Request)
 		return err
 	}
 	return writeJson(w, http.StatusOK, account)
-	return nil
+	// return nil
 }
 func (S *ApiServer) handleGetAccount(w http.ResponseWriter, req *http.Request) error {
 	values, err := S.store.GetsAllAccount()
@@ -124,9 +150,21 @@ func (S *ApiServer) handleCreateAccount(w http.ResponseWriter, req *http.Request
 	if err := S.store.createAccount(account); err != nil {
 		return err
 	}
+	tokenString, err := createJWT(account)
+	if err != nil {
+		log.Fatal(err)
+	}
 	return writeJson(w, http.StatusOK, account)
 }
-
+func createJWT(account *Account) (string, error) {
+	claims := &jwt.MapClaims{
+		"expiresAt":     2000000,
+		"accountNumber": account.Number,
+	}
+	secret := os.Getenv("TOKEN")
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	return token.SignedString(secret)
+}
 func (S *ApiServer) handleTransferAccount(w http.ResponseWriter, req *http.Request) error {
 	transfer := new(TransferRequest)
 	if err := json.NewDecoder(req.Body).Decode(transfer); err != nil {
