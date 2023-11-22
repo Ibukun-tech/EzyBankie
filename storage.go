@@ -49,13 +49,22 @@ func (p *PostGresSql) createAccoutTable() error {
 	return nil
 }
 func (p *PostGresSql) createAccount(acct *Account) error {
-	fmt.Println(acct)
+	// fmt.Println(acct)
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
 	query := `insert into account(
 		first_name, last_name, number, balance, created_at
 	) values($1, $2, $3, $4, $5)`
-	_, err := p.db.Query(query, acct.FirstName, acct.LastName, acct.Number, acct.Balance, acct.CreatedAt)
+	_, err = tx.Exec(query, acct.FirstName, acct.LastName, acct.Number, acct.Balance, acct.CreatedAt)
 	if err != nil {
+		tx.Rollback()
 		return err
+	}
+	err = tx.Commit()
+	if err != nil {
+		return nil
 	}
 	// fmt.Printf()
 	return nil
@@ -67,13 +76,7 @@ func (p *PostGresSql) GetsAllAccount() ([]*Account, error) {
 	}
 	accounts := []*Account{}
 	for query.Next() {
-		account := new(Account)
-		err := query.Scan(&account.ID,
-			&account.FirstName,
-			&account.LastName,
-			&account.Balance,
-			&account.CreatedAt,
-			&account.Number)
+		account, err := scanIntoAccount(query)
 		if err != nil {
 			return nil, err
 		}
@@ -81,12 +84,35 @@ func (p *PostGresSql) GetsAllAccount() ([]*Account, error) {
 	}
 	return accounts, nil
 }
+func scanIntoAccount(rows *sql.Rows) (*Account, error) {
+	account := new(Account)
+	err := rows.Scan(&account.ID, &account.FirstName,
+		&account.LastName,
+		&account.Balance,
+		&account.CreatedAt,
+		&account.Number)
+	if err != nil {
+		return nil, err
+	}
+	return account, nil
+}
 func (p *PostGresSql) GetAccountById(value int) (*Account, error) {
-	return &Account{}, nil
+	rows, err := p.db.Query("select * from account where id = $1", value)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		return scanIntoAccount(rows)
+	}
+	return nil, fmt.Errorf("account %d not found", value)
 }
 func (p *PostGresSql) UpdateAccount(*Account) error {
 	return nil
 }
 func (p *PostGresSql) DeleteAccount(value int) error {
+	_, err := p.db.Query("delete from account where id = $1", value)
+	if err != nil {
+		return err
+	}
 	return nil
 }
