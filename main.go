@@ -50,7 +50,7 @@ func (S *ApiServer) run() {
 	router.HandleFunc("/login", makeHttpHandlerFunc(S.loginAccount))
 	router.HandleFunc("/account", makeHttpHandlerFunc(S.handleAccount))
 	router.HandleFunc("/account/{id}", jwtMiddleWare(makeHttpHandlerFunc(S.handleAccountsById), S.store))
-	router.HandleFunc("/account/transfer", makeHttpHandlerFunc(S.handleTransferAccount))
+	router.HandleFunc("/account/{id}/transfer", jwtMiddleWare(makeHttpHandlerFunc(S.handleTransferAccount), S.store))
 	log.Println("Port " + S.listenAddress + " is now running")
 	http.ListenAndServe(S.listenAddress, router)
 
@@ -62,7 +62,21 @@ func (S *ApiServer) loginAccount(w http.ResponseWriter, req *http.Request) error
 	}
 	acc, _ := S.store.GetAccountByNumber(int(log.Number))
 	fmt.Println(acc)
-	writeJson(w, http.StatusOK, log)
+	hash, err := createJWT(acc)
+	if err != nil {
+		permissionDenied(w)
+	}
+	if !acc.validPassword(hash) {
+		permissionDenied(w)
+	}
+	ans := &LogInResponse{
+		Token:  hash,
+		Number: acc.Number,
+	}
+	token, _ := createJWT(acc)
+	// if err!={}
+	req.Header.Add("JWT-TOKEN", token)
+	writeJson(w, http.StatusOK, ans)
 	return nil
 }
 func permissionDenied(w http.ResponseWriter) {
@@ -207,6 +221,7 @@ func (S *ApiServer) handleTransferAccount(w http.ResponseWriter, req *http.Reque
 	if err := json.NewDecoder(req.Body).Decode(transfer); err != nil {
 		return nil
 	}
+	S.store.FindAccount(transfer)
 	defer req.Body.Close()
 	return writeJson(w, http.StatusOK, transfer)
 }

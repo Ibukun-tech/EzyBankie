@@ -9,6 +9,7 @@ import (
 )
 
 type Storage interface {
+	FindAccount(*TransferRequest) (*TransferRequest, error)
 	GetAccountByNumber(int) (*Account, error)
 	createAccount(*Account) error
 	GetAccountById(int) (*Account, error)
@@ -20,6 +21,21 @@ type PostGresSql struct {
 	db *sql.DB
 }
 
+func (p *PostGresSql) FindAccount(tr *TransferRequest) (*TransferRequest, error) {
+	query, err := p.db.Query("select * from accounts where number =$1", tr.Number)
+	if err != nil {
+		return nil, err
+	}
+	transfer := &TransferRequest{}
+	err = query.Scan(&transfer.Number)
+	if err != nil {
+		return nil, err
+	}
+	if transfer.Number != tr.Number {
+		return nil, fmt.Errorf("its not the same account number")
+	}
+	return nil, nil
+}
 func databaseConnection() (*PostGresSql, error) {
 	conStr := "user=postgres dbname=postgres password=ezybankgo sslmode=disable"
 	db, _ := sql.Open("postgres", conStr)
@@ -107,7 +123,7 @@ func (p *PostGresSql) GetAccountByNumber(number int) (*Account, error) {
 	for rows.Next() {
 		return scanIntoAccount(rows)
 	}
-	return nil, fmt.Errorf("account %d not found", value)
+	return nil, fmt.Errorf("account %d not found", number)
 }
 func (p *PostGresSql) GetAccountById(value int) (*Account, error) {
 	rows, err := p.db.Query("select * from account where id = $1", value)
