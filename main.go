@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -12,45 +13,13 @@ import (
 	"github.com/gorilla/mux"
 )
 
-type ApiFunc func(http.ResponseWriter, *http.Request) error
-type ApiError struct {
-	Error string `json:"error"`
-}
-
-func makeHttpHandlerFunc(A ApiFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, req *http.Request) {
-		if err := A(w, req); err != nil {
-			writeJson(w, http.StatusBadRequest, ApiError{
-				Error: err.Error(),
-			})
-		}
-	}
-}
-
-func writeJson(w http.ResponseWriter, status int, v any) error {
-	w.WriteHeader(status)
-	w.Header().Add("Content-Type", "application/json")
-
-	return json.NewEncoder(w).Encode(v)
-}
-func newApiServer(las string, store Storage) *ApiServer {
-	return &ApiServer{
-		listenAddress: las,
-		store:         store,
-	}
-}
-
-type ApiServer struct {
-	listenAddress string
-	store         Storage
-}
-
+// instatiation of the server to run .
 func (S *ApiServer) run() {
 	router := mux.NewRouter()
-	router.HandleFunc("/login", makeHttpHandlerFunc(S.loginAccount))
-	router.HandleFunc("/account", makeHttpHandlerFunc(S.handleAccount))
-	router.HandleFunc("/account/{id}", jwtMiddleWare(makeHttpHandlerFunc(S.handleAccountsById), S.store))
-	router.HandleFunc("/account/{id}/transfer", jwtMiddleWare(makeHttpHandlerFunc(S.handleTransferAccount), S.store))
+	router.HandleFunc("/login", MakeHttpHandlerFunc(S.loginAccount))
+	router.HandleFunc("/account", MakeHttpHandlerFunc(S.handleAccount))
+	router.HandleFunc("/account/{id}", jwtMiddleWare(MakeHttpHandlerFunc(S.handleAccountsById), S.store))
+	router.HandleFunc("/account/{id}/transfer", jwtMiddleWare(MakeHttpHandlerFunc(S.handleTransferAccount), S.store))
 	log.Println("Port " + S.listenAddress + " is now running")
 	http.ListenAndServe(S.listenAddress, router)
 
@@ -76,17 +45,12 @@ func (S *ApiServer) loginAccount(w http.ResponseWriter, req *http.Request) error
 	token, _ := createJWT(acc)
 	// if err!={}
 	req.Header.Add("JWT-TOKEN", token)
-	writeJson(w, http.StatusOK, ans)
-	return nil
-}
-func permissionDenied(w http.ResponseWriter) {
-	writeJson(w, http.StatusBadRequest, ApiError{
-		Error: "Invalid token",
-	})
+	return writeJson(w, http.StatusOK, ans)
+
 }
 func jwtMiddleWare(handlerFunc http.HandlerFunc, s Storage) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		// fmt.Println("calling JWT middleware")
+
 		validateTokenString := req.Header.Get("JWT-TOKEN")
 
 		token, err := validateJwt(validateTokenString)
@@ -105,12 +69,10 @@ func jwtMiddleWare(handlerFunc http.HandlerFunc, s Storage) http.HandlerFunc {
 			return
 		}
 		claims := token.Claims.(jwt.MapClaims)
-		// panic(reflect.TypeOf(claims["accountNumber"]))
 		if account.ID != claims["accountNumber"] {
 			permissionDenied(w)
 			return
 		}
-		// fmt.Println(claims)
 		handlerFunc(w, req)
 	}
 }
@@ -163,15 +125,14 @@ func (S *ApiServer) handleGetAccountId(w http.ResponseWriter, req *http.Request)
 		return err
 	}
 	return writeJson(w, http.StatusOK, account)
-	// return nil
 }
 func (S *ApiServer) handleGetAccount(w http.ResponseWriter, req *http.Request) error {
 	values, err := S.store.GetsAllAccount()
 	if err != nil {
 		return err
 	}
-	writeJson(w, http.StatusOK, values)
-	return nil
+	return writeJson(w, http.StatusOK, values)
+
 }
 func (S *ApiServer) handleDeleteAccount(w http.ResponseWriter, req *http.Request) error {
 	id, err := getParams(req)
@@ -181,8 +142,8 @@ func (S *ApiServer) handleDeleteAccount(w http.ResponseWriter, req *http.Request
 	if _, err := S.store.GetAccountById(id); err != nil {
 		return err
 	}
-	writeJson(w, http.StatusOK, map[string]int{"deleted": id})
-	return nil
+	return writeJson(w, http.StatusOK, map[string]int{"deleted": id})
+
 }
 func (S *ApiServer) handleCreateAccount(w http.ResponseWriter, req *http.Request) error {
 
@@ -225,7 +186,10 @@ func (S *ApiServer) handleTransferAccount(w http.ResponseWriter, req *http.Reque
 	defer req.Body.Close()
 	return writeJson(w, http.StatusOK, transfer)
 }
+
+// To start the whole server
 func main() {
+	io.ReadAll()
 	store, err := databaseConnection()
 	if err != nil {
 		log.Fatal(err)
