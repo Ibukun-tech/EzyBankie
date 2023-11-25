@@ -28,7 +28,7 @@ type Account struct {
 	CreatedAt         time.Time `json:"createdAt"`
 }
 type Login struct {
-	Email    string `json:"email"`
+	Number   int    `json:"number"`
 	Password string `json:"password"`
 }
 

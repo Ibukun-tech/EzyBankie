@@ -9,6 +9,7 @@ import (
 )
 
 type Storage interface {
+	GetAccountByNumber(int) (*Account, error)
 	createAccount(*Account) error
 	GetAccountById(int) (*Account, error)
 	UpdateAccount(*Account) error
@@ -96,6 +97,17 @@ func scanIntoAccount(rows *sql.Rows) (*Account, error) {
 		return nil, err
 	}
 	return account, nil
+}
+
+func (p *PostGresSql) GetAccountByNumber(number int) (*Account, error) {
+	rows, err := p.db.Query("select * from account where number = $1", number)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		return scanIntoAccount(rows)
+	}
+	return nil, fmt.Errorf("account %d not found", value)
 }
 func (p *PostGresSql) GetAccountById(value int) (*Account, error) {
 	rows, err := p.db.Query("select * from account where id = $1", value)

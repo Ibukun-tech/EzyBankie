@@ -60,6 +60,8 @@ func (S *ApiServer) loginAccount(w http.ResponseWriter, req *http.Request) error
 	if err := json.NewDecoder(req.Body).Decode(&log); err != nil {
 		return nil
 	}
+	acc, _ := S.store.GetAccountByNumber(int(log.Number))
+	fmt.Println(acc)
 	writeJson(w, http.StatusOK, log)
 	return nil
 }
