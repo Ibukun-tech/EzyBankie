@@ -40,6 +40,7 @@ func (p *PostGresSql) createAccoutTable() error {
 	query := `create table if not exists account(
 		id serial primary key,
 		first_name varchar(50),
+		email varchar(60)
 		last_name varchar(50),
 		number serial,
 		balance serial,

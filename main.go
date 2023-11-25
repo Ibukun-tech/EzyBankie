@@ -47,25 +47,54 @@ type ApiServer struct {
 
 func (S *ApiServer) run() {
 	router := mux.NewRouter()
+	router.HandleFunc("/login", makeHttpHandlerFunc(S.loginAccount))
 	router.HandleFunc("/account", makeHttpHandlerFunc(S.handleAccount))
-	router.HandleFunc("/account/{id}", jwtMiddleWare(makeHttpHandlerFunc(S.handleAccountsById)))
+	router.HandleFunc("/account/{id}", jwtMiddleWare(makeHttpHandlerFunc(S.handleAccountsById), S.store))
 	router.HandleFunc("/account/transfer", makeHttpHandlerFunc(S.handleTransferAccount))
 	log.Println("Port " + S.listenAddress + " is now running")
 	http.ListenAndServe(S.listenAddress, router)
 
 }
-func jwtMiddleWare(handlerFunc http.HandlerFunc) http.HandlerFunc {
+func (S *ApiServer) loginAccount(w http.ResponseWriter, req *http.Request) error {
+	log := Login{}
+	if err := json.NewDecoder(req.Body).Decode(&log); err != nil {
+		return nil
+	}
+	writeJson(w, http.StatusOK, log)
+	return nil
+}
+func permissionDenied(w http.ResponseWriter) {
+	writeJson(w, http.StatusBadRequest, ApiError{
+		Error: "Invalid token",
+	})
+}
+func jwtMiddleWare(handlerFunc http.HandlerFunc, s Storage) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		// fmt.Println("calling JWT middleware")
 		validateTokenString := req.Header.Get("JWT-TOKEN")
 
-		_, err := validateJwt(validateTokenString)
+		token, err := validateJwt(validateTokenString)
 		if err != nil {
-			writeJson(w, http.StatusBadRequest, ApiError{
-				Error: "Invalid token",
-			})
+			permissionDenied(w)
 			return
 		}
+		if !token.Valid {
+			permissionDenied(w)
+			return
+		}
+		userId, _ := getParams(req)
+		account, err := s.GetAccountById(userId)
+		if err != nil {
+			permissionDenied(w)
+			return
+		}
+		claims := token.Claims.(jwt.MapClaims)
+		// panic(reflect.TypeOf(claims["accountNumber"]))
+		if account.ID != claims["accountNumber"] {
+			permissionDenied(w)
+			return
+		}
+		// fmt.Println(claims)
 		handlerFunc(w, req)
 	}
 }
@@ -146,14 +175,19 @@ func (S *ApiServer) handleCreateAccount(w http.ResponseWriter, req *http.Request
 	if err := json.NewDecoder(req.Body).Decode(createAccount); err != nil {
 		return err
 	}
-	account := HandleAccount(createAccount.FirstName, createAccount.LastName)
+	account, err := HandleAccount(createAccount.FirstName, createAccount.LastName, createAccount.Password, createAccount.Email)
+	if err != nil {
+
+		log.Fatal(err)
+	}
 	if err := S.store.createAccount(account); err != nil {
 		return err
 	}
-	tokenString, err := createJWT(account)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// _, err = createJWT(account)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// req.Header.Add("JWT_TOKEN", tokenString)
 	return writeJson(w, http.StatusOK, account)
 }
 func createJWT(account *Account) (string, error) {
@@ -163,7 +197,8 @@ func createJWT(account *Account) (string, error) {
 	}
 	secret := os.Getenv("TOKEN")
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
-	return token.SignedString(secret)
+	return token.SignedString([]byte(secret))
+
 }
 func (S *ApiServer) handleTransferAccount(w http.ResponseWriter, req *http.Request) error {
 	transfer := new(TransferRequest)
