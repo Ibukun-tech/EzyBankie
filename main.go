@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -189,7 +188,7 @@ func (S *ApiServer) handleTransferAccount(w http.ResponseWriter, req *http.Reque
 
 // To start the whole server
 func main() {
-	io.ReadAll()
+	// io.ReadAll()
 	store, err := databaseConnection()
 	if err != nil {
 		log.Fatal(err)
